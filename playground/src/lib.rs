@@ -10,16 +10,20 @@ use rand::Rng;
 
 use log::{debug, info};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use clap::AppSettings;
 
 use magical_bitcoin_wallet::bitcoin;
 use magical_bitcoin_wallet::database::memory::MemoryDatabase;
 use magical_bitcoin_wallet::miniscript;
+use magical_bitcoin_wallet::descriptor::DescriptorExtendedKey;
+use magical_bitcoin_wallet::descriptor::keys::{Key, parse_key};
+use magical_bitcoin_wallet::descriptor::error::Error as DescriptorError;
 use magical_bitcoin_wallet::*;
 
 use bitcoin::*;
+use bitcoin::secp256k1::Secp256k1;
 
 use miniscript::policy::Concrete;
 use miniscript::Descriptor;
@@ -131,6 +135,24 @@ impl Alias {
     }
 }
 
+#[derive(Serialize, Debug)]
+pub struct CompilerResult {
+    descriptor: String,
+    aliases: HashMap<String, (String, String)>,
+}
+
+fn add_public_to_aliases(map: HashMap<String, String>) -> Result<HashMap<String, (String, String)>, String> {
+	let secp = Secp256k1::gen_new();
+
+    Ok(map
+        .into_iter()
+        .map(|(k, v)| {
+			let (key, parsed) = parse_key(&v)?;
+			Ok((k, (key, format!("{}", parsed.public(&secp)?))))
+		})
+        .collect::<Result<_, _>>().map_err(|e: DescriptorError| format!("{:?}", e))?)
+}
+
 #[wasm_bindgen]
 pub fn compile(policy: String, aliases: String, script_type: String) -> Promise {
     future_to_promise(async move {
@@ -157,6 +179,11 @@ pub fn compile(policy: String, aliases: String, script_type: String) -> Promise 
         );
         let descriptor = descriptor?;
 
-        Ok(format!("{}", descriptor).into())
+		let result = CompilerResult {
+			descriptor: format!("{}", descriptor),
+			aliases: add_public_to_aliases(aliases)?,
+		};
+
+		Ok(serde_json::to_string(&result).unwrap().into())
     })
 }

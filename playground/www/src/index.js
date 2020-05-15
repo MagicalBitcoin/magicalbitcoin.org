@@ -130,6 +130,7 @@ async function startWallet(desc, change_desc) {
     const policy = document.getElementById('policy');
     const compiler_script_type = document.getElementById('compiler_script_type');
     const compiler_output = document.getElementById('compiler_output');
+    const compiler_output_aliases = document.getElementById('compiler_output_aliases');
     const compile_button = document.getElementById('compile_button');
     compile_button.onclick = (e) => {
         if (policy.value.length == 0) {
@@ -164,7 +165,10 @@ async function startWallet(desc, change_desc) {
         });
 
         compile(policy.value, JSON.stringify(aliases), compiler_script_type.value)
-            .then(res => compiler_output.innerHTML = res)
+            .then(res => {
+		const decoded = JSON.parse(res);
+		compiler_output.innerHTML = decoded.descriptor;
+	     })
             .catch(err => compiler_output.innerHTML = `<span class="error">${err}</span>`);
     }
 })();
